@@ -187,8 +187,8 @@ func googleTagManagerHandle(w http.ResponseWriter, r *http.Request, path string)
 		re = regexp.MustCompile(`www.google-analytics.com`)
 		body = re.ReplaceAll([]byte(body), []byte(endpointURI))
 
-		re = regexp.MustCompile(`(\/)?analytics.js`)
-		body = re.ReplaceAll([]byte(body), []byte(`/`+settingsGGGP.JsSubdirectory+`/`+settingsGGGP.GaFilename))
+		re = regexp.MustCompile(`(\/)?analytics.js[^\\\/]`)
+		body = re.ReplaceAll([]byte(body), []byte(`/`+settingsGGGP.JsSubdirectory+`/`+settingsGGGP.GaFilename+`"`))
 
 		re = regexp.MustCompile(`u\/analytics_debug.js`)
 		body = re.ReplaceAll([]byte(body), []byte(`/`+settingsGGGP.JsSubdirectory+`/`+settingsGGGP.GaDebugFilename))
