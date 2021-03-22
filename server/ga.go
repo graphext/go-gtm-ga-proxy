@@ -440,3 +440,223 @@ func googleAnalyticsCollectHandle(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(body))
 	}
 }
+
+func otherAnalyticsJsHandle(w http.ResponseWriter, r *http.Request, path string, source string) {
+	var sourceCodeToReturn []byte
+	var statusCodeToReturn int = 200
+	var headersToReturn http.Header
+	var usedCache bool
+	var endpointURI = settingsGGGP.EndpointURI
+	var cachePath = path
+
+	if settingsGGGP.EndpointURI == "" {
+		endpointURI = r.Host
+		cachePath = endpointURI + "/" + path
+	}
+
+	GaCache, CacheExists := srcGaCache[cachePath]
+
+	if CacheExists == false {
+		gaMapSync.Lock()
+		srcGaCache[cachePath] = gaSourceCodeCache{lastUpdate: 0}
+		gaMapSync.Unlock()
+
+		GaCache, _ = srcGaCache[cachePath]
+	}
+
+	if settingsGGGP.EnableDebugOutput {
+		fmt.Println(`Locking Cache MUX`)
+	}
+
+	GaCache.mux.Lock()
+
+	if settingsGGGP.EnableDebugOutput {
+		fmt.Println(`Locked Cache MUX`)
+	}
+
+	if GaCache.lastUpdate > (time.Now().Unix() - settingsGGGP.GaCacheTime) {
+		if settingsGGGP.EnableDebugOutput {
+			fmt.Println(`Unlocking Cache MUX (Cache)`)
+		}
+		GaCache.mux.Unlock()
+		if settingsGGGP.EnableDebugOutput {
+			fmt.Println(`Unlocked Cache MUX (Cache)`)
+		}
+
+		if settingsGGGP.EnableDebugOutput {
+			fmt.Println(`Fetching GA-JS Request from Cache...`)
+		}
+
+		sourceCodeToReturn = GaCache.src
+		headersToReturn = GaCache.headers
+		usedCache = true
+	} else {
+		if settingsGGGP.EnableDebugOutput {
+			fmt.Println(`Refreshing Cache for GA-JS Request...`)
+		}
+
+		client := &http.Client{}
+
+		var req *http.Request
+		var err error
+
+		req, err = http.NewRequest(`GET`, source, nil)
+
+		if settingsGGGP.EnableDebugOutput {
+			fmt.Printf(`REQUESTING: %s`, source)
+		}
+
+		req.Header.Set(`User-Agent`, `GoGtmGaProxy `+os.Getenv(`APP_VERSION`)+`; github.com/blaumedia/go-gtm-ga-proxy`)
+
+		resp, err := client.Do(req)
+		if err != nil {
+			fmt.Println(`Experienced problems on requesting analytics.js from google. Aborting.`)
+
+			return
+		}
+
+		defer resp.Body.Close()
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			fmt.Println(`Experienced problems on requesting analytics.js from google. Aborting.`)
+
+			return
+		}
+
+		re := regexp.MustCompile(`api.segment.io/v1`)
+		body = re.ReplaceAll([]byte(body), []byte(endpointURI + `/segment`))
+
+		if resp.StatusCode == 200 {
+			GaCache.headers = resp.Header
+			GaCache.src = body
+			GaCache.lastUpdate = time.Now().Unix()
+		}
+
+		headersToReturn = resp.Header
+		statusCodeToReturn = resp.StatusCode
+		sourceCodeToReturn = body
+		usedCache = false
+
+		if settingsGGGP.EnableDebugOutput {
+			fmt.Println(`Unlocking Cache MUX (No-Cache)`)
+		}
+
+		GaCache.mux.Unlock()
+
+		if settingsGGGP.EnableDebugOutput {
+			fmt.Println(`Unlocked Cache MUX (No-Cache)`)
+		}
+
+		// Reassigning the copy of the struct back to map
+		gaMapSync.Lock()
+		srcGaCache[cachePath] = GaCache
+		gaMapSync.Unlock()
+	}
+
+	setResponseHeaders(w, headersToReturn)
+
+	if usedCache {
+		w.Header().Add(`X-Cache-Hit`, `true`)
+	} else {
+		w.Header().Add(`X-Cache-Hit`, `false`)
+	}
+
+	for _, f := range settingsGGGP.pluginEngine.dispatcher[`after_ga_js`] {
+		f(&w, r, &statusCodeToReturn, &sourceCodeToReturn)
+	}
+
+	w.WriteHeader(statusCodeToReturn)
+
+	w.Write([]byte(sourceCodeToReturn))
+}
+
+func segmentAPIHandle(w http.ResponseWriter, r *http.Request) {
+	var redirectURL *url.URL
+
+	if r.Method != `GET` && r.Method != `POST` {
+		fmt.Println(`ERROR: Connection to collect endpoint through ` + r.Method + ` method. Aborting.`)
+		return
+	}
+
+	client := &http.Client{}
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return errors.New("Redirect")
+	}
+	clientURL := ``
+
+	switch r.URL.Path {
+	case `/segment/p`:
+		clientURL = `https://api.segment.io/v1/p`
+	case `/segment/t`:
+		clientURL = `https://api.segment.io/v1/t`
+	case `/segment/i`:
+		clientURL = `https://api.segment.io/v1/i`
+	default:
+		clientURL = `https://api.segment.io/v1/`
+	}
+
+	var req *http.Request
+	var err error
+
+	postPayloadRaw, _ := ioutil.ReadAll(r.Body)
+
+	formatPayLoad := string(postPayloadRaw)
+
+	switch r.Method {
+	case `GET`:
+		req, err = http.NewRequest(`GET`, clientURL+`?`+formatPayLoad, nil)
+		if err != nil {
+			fmt.Println(`Experienced problems on redirecting collect to google (GET). Aborting.`)
+
+			return
+		}
+		if settingsGGGP.EnableDebugOutput {
+			fmt.Println(clientURL + `?` + formatPayLoad)
+		}
+	case `POST`:
+		req, err = http.NewRequest(`POST`, clientURL, bytes.NewBuffer(postPayloadRaw))
+		if err != nil {
+			fmt.Println(`Experienced problems on redirecting collect to google (POST). Aborting.`)
+
+			return
+		}
+		if settingsGGGP.EnableDebugOutput {
+			fmt.Println(`Format Payload:`)
+			fmt.Println(formatPayLoad)
+		}
+	}
+
+	req.Header.Set(`User-Agent`, `GoGtmGaProxy `+os.Getenv(`APP_VERSION`)+`; github.com/blaumedia/go-gtm-ga-proxy`)
+	req.Header.Set(`Accept`, `*/*`)
+	req.Header.Set(`Content-Type`, `application/json`)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		if resp.StatusCode == http.StatusFound {
+			redirectURL, _ = resp.Location()
+		} else {
+			fmt.Println(`Experienced problems on redirecting requests to segment. Aborting.`)
+
+			return
+		}
+	}
+
+	defer resp.Body.Close()
+
+	if redirectURL != nil {
+		fmt.Println(`Redirecting to: ` + redirectURL.String())
+		http.Redirect(w, r, redirectURL.String(), http.StatusFound)
+	} else {
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			fmt.Println(`Experienced problems on redirecting requests to segment. Aborting.`)
+
+			return
+		}
+		setResponseHeaders(w, resp.Header)
+		w.Header().Add("Access-Control-Allow-Origin", r.Header.Get("origin"))
+
+		w.WriteHeader(resp.StatusCode)
+		w.Write([]byte(body))
+	}
+}

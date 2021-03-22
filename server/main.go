@@ -68,6 +68,10 @@ func javascriptFilesHandle(w http.ResponseWriter, r *http.Request) {
 		googleAnalyticsJsHandle(w, r, `default`)
 	case `/` + settingsGGGP.JsSubdirectory + `/` + settingsGGGP.GaDebugFilename:
 		googleAnalyticsJsHandle(w, r, `debug`)
+	case `/` + settingsGGGP.JsSubdirectory + `/segment.` + settingsGGGP.GaFilename:
+		otherAnalyticsJsHandle(w, r, `segment`, `https://cdn.segment.com/analytics.js/v1/2O0r3UtWd4T6rC6T759sEr1LVaZAQDCU/analytics.min.js`)
+	case `/` + settingsGGGP.JsSubdirectory + `/mxp.` + settingsGGGP.GaFilename:
+		otherAnalyticsJsHandle(w, r, `mxp`, `https://cdn.mxpnl.com/libs/mixpanel-2-latest.min.js`)
 	default:
 		if r.URL.Path[:len(settingsGGGP.JsSubdirectory+settingsGGGP.GaPluginsDirectoryname)+3] == `/`+settingsGGGP.JsSubdirectory+`/`+settingsGGGP.GaPluginsDirectoryname+`/` {
 			googleAnalyticsJsHandle(w, r, r.URL.Path)
@@ -86,6 +90,10 @@ func collectHandle(w http.ResponseWriter, r *http.Request) {
 	googleAnalyticsCollectHandle(w, r)
 }
 
+func segmentHandle(w http.ResponseWriter, r *http.Request) {
+	segmentAPIHandle(w, r)
+}
+
 func setResponseHeaders(w http.ResponseWriter, headers http.Header) {
 	// Looping through headers from request
 	for headerName, headerValue := range headers {
@@ -95,7 +103,7 @@ func setResponseHeaders(w http.ResponseWriter, headers http.Header) {
 		}
 	}
 
-	w.Header().Set(`X-Powered-By`, `GoGtmGaProxy `+os.Getenv(`APP_VERSION`))
+	//w.Header().Set(`X-Powered-By`, `GoGtmGaProxy `+os.Getenv(`APP_VERSION`))
 }
 
 func main() {
@@ -229,6 +237,9 @@ func main() {
 	http.HandleFunc(settingsGGGP.GaCollectEndpoint, collectHandle)
 	http.HandleFunc(settingsGGGP.GaCollectEndpointRedirect, collectHandle)
 	http.HandleFunc(settingsGGGP.GaCollectEndpointJ, collectHandle)
+	http.HandleFunc(`/segment/i`, segmentHandle)
+	http.HandleFunc(`/segment/p`, segmentHandle)
+	http.HandleFunc(`/segment/t`, segmentHandle)
 
 	if err := http.ListenAndServe(`:8080`, nil); err != nil {
 		panic(err)

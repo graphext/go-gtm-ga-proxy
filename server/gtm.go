@@ -196,6 +196,13 @@ func googleTagManagerHandle(w http.ResponseWriter, r *http.Request, path string)
 		re = regexp.MustCompile(`\/gtag\/js`)
 		body = re.ReplaceAll([]byte(body), []byte(`/`+settingsGGGP.JsSubdirectory+`/`+settingsGGGP.GtagFilename))
 
+		// Avoid other analytics tools being blocked...
+		re = regexp.MustCompile(`https:\\/\\/cdn\.segment\.com\\/analytics\.js\\/v1\\/\\"\+b\+\\"\\/analytics\.min\.js`)
+		body = re.ReplaceAll([]byte(body), []byte(`https://`+ endpointURI + `/` + settingsGGGP.JsSubdirectory + `/segment.` + settingsGGGP.GaFilename))
+
+		re = regexp.MustCompile(`\\/\\/cdn.mxpnl.com\\/libs\\/mixpanel-2-latest.min.js`)
+		body = re.ReplaceAll([]byte(body), []byte(`//`+ endpointURI + `/` + settingsGGGP.JsSubdirectory + `/mxp.` + settingsGGGP.GaFilename))
+
 		if settingsGGGP.JsEnableMinify {
 			m := minify.New()
 			m.AddCmd(`application/javascript`, exec.Command("uglifyjs"))
