@@ -591,6 +591,8 @@ func segmentAPIHandle(w http.ResponseWriter, r *http.Request) {
 		clientURL = `https://api.segment.io/v1/t`
 	case `/segment/i`:
 		clientURL = `https://api.segment.io/v1/i`
+	case `/segment/m`:
+		clientURL = `https://api.segment.io/v1/m`
 	default:
 		clientURL = `https://api.segment.io/v1/`
 	}
