@@ -526,6 +526,9 @@ func otherAnalyticsJsHandle(w http.ResponseWriter, r *http.Request, path string,
 		re := regexp.MustCompile(`api.segment.io/v1`)
 		body = re.ReplaceAll([]byte(body), []byte(endpointURI + `/segment`))
 
+		re = regexp.MustCompile(`https://api-js.mixpanel.com`)
+		body = re.ReplaceAll([]byte(body), []byte(`https://` + endpointURI + `/mxp`))
+
 		if resp.StatusCode == 200 {
 			GaCache.headers = resp.Header
 			GaCache.src = body
@@ -593,6 +596,12 @@ func segmentAPIHandle(w http.ResponseWriter, r *http.Request) {
 		clientURL = `https://api.segment.io/v1/i`
 	case `/segment/m`:
 		clientURL = `https://api.segment.io/v1/m`
+	case `/mxp/engage/`:
+		clientURL = `https://api-js.mixpanel.com/engage/`
+		w.Header().Add("Access-Control-Allow-Credentials", "true")
+	case `/mxp/decide/`:
+		clientURL = `https://api-js.mixpanel.com/decide/`
+		w.Header().Add("Access-Control-Allow-Credentials", "true")
 	default:
 		clientURL = `https://api.segment.io/v1/`
 	}
@@ -606,17 +615,17 @@ func segmentAPIHandle(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case `GET`:
-		req, err = http.NewRequest(`GET`, clientURL+`?`+formatPayLoad, nil)
+		req, err = http.NewRequest(`GET`, clientURL+`?`+ r.URL.RawQuery + formatPayLoad, nil)
 		if err != nil {
 			fmt.Println(`Experienced problems on redirecting collect to google (GET). Aborting.`)
 
 			return
 		}
 		if settingsGGGP.EnableDebugOutput {
-			fmt.Println(clientURL + `?` + formatPayLoad)
+			fmt.Println(clientURL + `?` + r.URL.RawQuery + formatPayLoad)
 		}
 	case `POST`:
-		req, err = http.NewRequest(`POST`, clientURL, bytes.NewBuffer(postPayloadRaw))
+		req, err = http.NewRequest(`POST`, clientURL + `?` + r.URL.RawQuery, bytes.NewBuffer(postPayloadRaw))
 		if err != nil {
 			fmt.Println(`Experienced problems on redirecting collect to google (POST). Aborting.`)
 

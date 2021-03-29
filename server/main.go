@@ -241,6 +241,8 @@ func main() {
 	http.HandleFunc(`/segment/p`, segmentHandle)
 	http.HandleFunc(`/segment/t`, segmentHandle)
 	http.HandleFunc(`/segment/m`, segmentHandle)
+	http.HandleFunc(`/mxp/engage/`, segmentHandle)
+	http.HandleFunc(`/mxp/decide/`, segmentHandle)
 
 	if err := http.ListenAndServe(`:8080`, nil); err != nil {
 		panic(err)
