@@ -602,6 +602,9 @@ func segmentAPIHandle(w http.ResponseWriter, r *http.Request) {
 	case `/mxp/decide/`:
 		clientURL = `https://api-js.mixpanel.com/decide/`
 		w.Header().Add("Access-Control-Allow-Credentials", "true")
+	case `/mxp/track/`:
+		clientURL = `https://api-js.mixpanel.com/track/`
+		w.Header().Add("Access-Control-Allow-Credentials", "true")
 	default:
 		clientURL = `https://api.segment.io/v1/`
 	}
