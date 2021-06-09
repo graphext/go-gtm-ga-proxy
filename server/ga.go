@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -587,6 +588,8 @@ func segmentAPIHandle(w http.ResponseWriter, r *http.Request) {
 	}
 	clientURL := ``
 
+	var formatPayLoad string
+
 	switch r.URL.Path {
 	case `/segment/p`:
 		clientURL = `https://api.segment.io/v1/p`
@@ -598,6 +601,18 @@ func segmentAPIHandle(w http.ResponseWriter, r *http.Request) {
 		clientURL = `https://api.segment.io/v1/m`
 	case `/mxp/engage/`:
 		clientURL = `https://api-js.mixpanel.com/engage/`
+		decformatPayload, derr := base64.StdEncoding.DecodeString(r.FormValue("data"))
+		if derr == nil {
+			var engageData []interface{}
+			err := json.Unmarshal(decformatPayload, &engageData)
+			if err == nil {
+				engageDataF := engageData[0].(map[string]interface{})
+				engageDataF["$ip"] = engageDataF["$set"].(map[string]interface{})["ip"]
+				engageData[0] = engageDataF
+			}
+			newPayload, err := json.Marshal(engageData)
+			formatPayLoad = "data=" + base64.URLEncoding.EncodeToString(newPayload)
+		}
 		w.Header().Add("Access-Control-Allow-Credentials", "true")
 	case `/mxp/decide/`:
 		clientURL = `https://api-js.mixpanel.com/decide/`
@@ -614,7 +629,9 @@ func segmentAPIHandle(w http.ResponseWriter, r *http.Request) {
 
 	postPayloadRaw, _ := ioutil.ReadAll(r.Body)
 
-	formatPayLoad := string(postPayloadRaw)
+	if formatPayLoad == "" {
+		formatPayLoad = string(postPayloadRaw)
+	}
 
 	switch r.Method {
 	case `GET`:
