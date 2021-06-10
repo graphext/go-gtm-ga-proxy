@@ -588,7 +588,7 @@ func segmentAPIHandle(w http.ResponseWriter, r *http.Request) {
 	}
 	clientURL := ``
 
-	var formatPayLoad string
+	var postPayloadRaw []byte
 
 	switch r.URL.Path {
 	case `/segment/p`:
@@ -611,7 +611,7 @@ func segmentAPIHandle(w http.ResponseWriter, r *http.Request) {
 				engageData[0] = engageDataF
 			}
 			newPayload, err := json.Marshal(engageData)
-			formatPayLoad = "data=" + base64.URLEncoding.EncodeToString(newPayload)
+			postPayloadRaw = []byte("data=" + base64.URLEncoding.EncodeToString(newPayload))
 		}
 		w.Header().Add("Access-Control-Allow-Credentials", "true")
 	case `/mxp/decide/`:
@@ -627,11 +627,10 @@ func segmentAPIHandle(w http.ResponseWriter, r *http.Request) {
 	var req *http.Request
 	var err error
 
-	postPayloadRaw, _ := ioutil.ReadAll(r.Body)
-
-	if formatPayLoad == "" {
-		formatPayLoad = string(postPayloadRaw)
+	if postPayloadRaw == nil {
+		postPayloadRaw, _ = ioutil.ReadAll(r.Body)
 	}
+	formatPayLoad := string(postPayloadRaw)
 
 	switch r.Method {
 	case `GET`:
